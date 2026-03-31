@@ -1,0 +1,2 @@
+"""Mahjong game core modules."""
+
