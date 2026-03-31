@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { tileToLabel } from "../utils/tile";
+
 defineProps<{
   discards: string[];
 }>();
@@ -6,7 +8,7 @@ defineProps<{
 
 <template>
   <div class="pool">
-    <span v-for="(tile, idx) in discards" :key="`${tile}-${idx}`">{{ tile }}</span>
+    <span v-for="(tile, idx) in discards" :key="`${tile}-${idx}`">{{ tileToLabel(tile) }}</span>
   </div>
 </template>
 
@@ -22,4 +24,3 @@ defineProps<{
   color: #f9f2dc;
 }
 </style>
-

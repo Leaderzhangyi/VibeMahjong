@@ -28,16 +28,24 @@ export const useGameStore = defineStore("game", {
   }),
   actions: {
     connect() {
-      if (this.socket) return;
+      if (this.socket) return this.socket;
       const socket = io(baseURL, {
         transports: ["websocket"],
         path: "/ws/socket.io",
       });
       socket.on("connect", () => {
         this.connected = true;
+        this.error = null;
+        this.log("已连接服务器");
       });
       socket.on("disconnect", () => {
         this.connected = false;
+        this.log("连接断开");
+      });
+      socket.on("connect_error", (err: Error) => {
+        this.connected = false;
+        this.error = `连接失败: ${err.message}`;
+        this.log(this.error);
       });
       socket.on("joined", (payload: { room_id: string; seat: number }) => {
         this.mySeat = payload.seat;
@@ -57,14 +65,22 @@ export const useGameStore = defineStore("game", {
         this.log(`错误: ${payload.message}`);
       });
       this.socket = socket;
+      return socket;
     },
     joinRoom(roomId: string, name: string) {
-      this.connect();
+      const socket = this.connect();
       this.roomId = roomId;
       this.name = name;
-      this.socket?.emit("join", { room_id: roomId, name });
+
+      const emitJoin = () => socket?.emit("join", { room_id: roomId, name });
+      if (socket?.connected) {
+        emitJoin();
+      } else {
+        socket?.once("connect", emitJoin);
+      }
     },
     setReady(ready = true) {
+      this.log(ready ? "已点击准备" : "取消准备");
       this.socket?.emit("ready", { ready });
     },
     sendAction(action: Record<string, unknown>) {
@@ -72,7 +88,7 @@ export const useGameStore = defineStore("game", {
     },
     log(line: string) {
       this.logs.unshift(`${new Date().toLocaleTimeString()} ${line}`);
-      this.logs = this.logs.slice(0, 40);
+      this.logs = this.logs.slice(0, 60);
     },
     reset() {
       this.snapshot = null;

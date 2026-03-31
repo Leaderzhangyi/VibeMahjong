@@ -1,6 +1,7 @@
 export interface PlayerView {
   seat: number;
   name: string;
+  is_bot?: boolean;
   ready: boolean;
   score: number;
   lack: string | null;
@@ -35,4 +36,3 @@ export interface RoomSnapshot {
     payments: Record<number, number>;
   } | null;
 }
-

@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { tileToLabel } from "../utils/tile";
+
 const props = defineProps<{
   actions: string[];
   targetTile?: string;
@@ -8,6 +10,16 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: "action", action: string, payload?: Record<string, unknown>): void;
 }>();
+
+const labels: Record<string, string> = {
+  pong: "碰",
+  kong_exposed: "明杠",
+  kong_concealed: "暗杠",
+  win: "胡",
+  win_self_draw: "自摸",
+  pass: "过",
+  discard: "出牌",
+};
 
 const doAction = (action: string) => {
   if (action === "kong_concealed") {
@@ -22,8 +34,10 @@ const doAction = (action: string) => {
 <template>
   <div class="action-bar">
     <button v-for="action in actions" :key="action" class="action-btn" @click="doAction(action)">
-      {{ action }}
-      <span v-if="targetTile && ['pong', 'kong_exposed', 'win'].includes(action)">({{ targetTile }})</span>
+      {{ labels[action] || action }}
+      <span v-if="targetTile && ['pong', 'kong_exposed', 'win'].includes(action)">
+        ({{ tileToLabel(targetTile) }})
+      </span>
     </button>
   </div>
 </template>

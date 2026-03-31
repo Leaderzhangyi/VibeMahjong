@@ -58,9 +58,12 @@ class RoundResult:
 
 
 class GameRoom:
-    def __init__(self, room_id: str, seed: int | None = None) -> None:
+    BOT_SID_PREFIX = "bot:"
+
+    def __init__(self, room_id: str, seed: int | None = None, auto_fill_bots: bool = False) -> None:
         self.room_id = room_id
         self.seed = seed
+        self.auto_fill_bots = auto_fill_bots
         self.phase: GamePhase = GamePhase.WAITING
         self.players: list[PlayerState | None] = [None, None, None, None]
         self.sid_to_seat: dict[str, int] = {}
@@ -89,6 +92,11 @@ class GameRoom:
         if seat is None:
             return
         self.players[seat] = None
+        if not self._is_bot_sid(sid):
+            for idx, player in enumerate(self.players):
+                if player and self._is_bot_sid(player.sid):
+                    self.sid_to_seat.pop(player.sid, None)
+                    self.players[idx] = None
         self.phase = GamePhase.WAITING
         self.current_turn = None
         self.reaction = None
@@ -98,6 +106,8 @@ class GameRoom:
         player.ready = ready
         if ready and self._active_player_count() == 4 and all(self.players[i] and self.players[i].ready for i in range(4)):
             self.start_round()
+        if self.auto_fill_bots:
+            self.auto_progress()
 
     def start_round(self) -> None:
         self.phase = GamePhase.SWAP_TILES
@@ -163,6 +173,11 @@ class GameRoom:
         tile = Tile.from_code(tile_code)
         if len(player.hand.tiles) % 3 != 2:
             raise ValueError("hand tile count does not allow discard")
+        must_lack = ActionChecker.must_discard_lack(player.hand, player.lack)
+        if must_lack and player.lack is not None and tile.suit != player.lack:
+            raise ValueError(f"must discard lack suit first: {player.lack.value}")
+        if player.hand.count(tile) <= 0:
+            raise ValueError("tile not in hand")
         if not ActionChecker.can_discard(player.hand, tile, player.lack):
             raise ValueError("illegal discard")
 
@@ -340,6 +355,7 @@ class GameRoom:
             item = {
                 "seat": player.seat,
                 "name": player.name,
+                "is_bot": self._is_bot_sid(player.sid),
                 "ready": player.ready,
                 "score": player.score,
                 "lack": player.lack.value if player.lack else None,
@@ -476,8 +492,119 @@ class GameRoom:
     def _active_player_count(self) -> int:
         return len([p for p in self.players if p is not None])
 
+    def human_player_count(self) -> int:
+        return len([p for p in self.players if p is not None and not self._is_bot_sid(p.sid)])
+
+    def auto_progress(self, max_steps: int = 256) -> None:
+        for _ in range(max_steps):
+            progressed = False
+
+            if self.phase == GamePhase.WAITING and self.auto_fill_bots:
+                self._fill_empty_with_bots_if_needed()
+                if self._active_player_count() == 4 and all(self.players[i] and self.players[i].ready for i in range(4)):
+                    self.start_round()
+                    progressed = True
+
+            elif self.phase == GamePhase.SWAP_TILES:
+                for player in self._iter_players():
+                    if not self._is_bot_sid(player.sid):
+                        continue
+                    if player.swap_selection is not None:
+                        continue
+                    choice = player.hand.to_codes(sorted_output=True)[:3]
+                    self.choose_swap_tiles(player.sid, choice)
+                    progressed = True
+
+            elif self.phase == GamePhase.CHOOSE_LACK:
+                for player in self._iter_players():
+                    if not self._is_bot_sid(player.sid):
+                        continue
+                    if player.lack is not None:
+                        continue
+                    suit = self._bot_choose_lack(player)
+                    self.choose_lack(player.sid, suit.value)
+                    progressed = True
+
+            elif self.phase == GamePhase.PLAYING:
+                if self.reaction is not None:
+                    for seat in list(self.reaction.candidates.keys()):
+                        if seat in self.reaction.passed:
+                            continue
+                        player = self._player_by_seat(seat)
+                        if not self._is_bot_sid(player.sid):
+                            continue
+                        options = self.reaction.candidates[seat]
+                        if "win" in options and not self._has_pending_human_reaction():
+                            self.win(player.sid, "discard")
+                            progressed = True
+                            break
+                        self.pass_action(player.sid)
+                        progressed = True
+                    if progressed:
+                        continue
+
+                if self.current_turn is not None:
+                    player = self._player_by_seat(self.current_turn)
+                    if self._is_bot_sid(player.sid):
+                        available = self.available_actions(player.seat)
+                        actions = available.get("actions", [])
+                        if "win_self_draw" in actions:
+                            self.win(player.sid, "self_draw")
+                            progressed = True
+                        elif "kong_concealed" in actions:
+                            kong_tiles = available.get("concealed_kong_tiles", [])
+                            if kong_tiles:
+                                self.kong_concealed(player.sid, kong_tiles[0])
+                                progressed = True
+                        elif "discard" in actions:
+                            tile = self._bot_choose_discard(player)
+                            self.discard(player.sid, tile.code)
+                            progressed = True
+
+            if not progressed:
+                break
+
     def _iter_players(self) -> list[PlayerState]:
         return [p for p in self.players if p is not None]
+
+    def _fill_empty_with_bots_if_needed(self) -> None:
+        if not any(p and p.ready and not self._is_bot_sid(p.sid) for p in self.players):
+            return
+        for seat in range(4):
+            player = self.players[seat]
+            if player is None:
+                sid = f"{self.BOT_SID_PREFIX}{self.room_id}:{seat}"
+                bot = PlayerState(sid=sid, seat=seat, name=f"Bot{seat}", ready=True)
+                self.players[seat] = bot
+                self.sid_to_seat[sid] = seat
+            elif self._is_bot_sid(player.sid):
+                player.ready = True
+
+    def _bot_choose_lack(self, player: PlayerState) -> Suit:
+        counts = {suit: player.hand.suit_count(suit) for suit in Suit}
+        return min(Suit, key=lambda s: (counts[s], s.value))
+
+    def _bot_choose_discard(self, player: PlayerState) -> Tile:
+        sorted_hand = player.hand.sorted()
+        if player.lack is not None:
+            lack_tiles = [tile for tile in sorted_hand if tile.suit == player.lack]
+            if lack_tiles:
+                return lack_tiles[0]
+        return sorted_hand[0]
+
+    def _has_pending_human_reaction(self) -> bool:
+        if self.reaction is None:
+            return False
+        for seat in self.reaction.candidates.keys():
+            if seat in self.reaction.passed:
+                continue
+            player = self._player_by_seat(seat)
+            if not self._is_bot_sid(player.sid):
+                return True
+        return False
+
+    def _is_bot_sid(self, sid: str) -> bool:
+        return sid.startswith(self.BOT_SID_PREFIX)
 
     def _player_by_sid(self, sid: str) -> PlayerState:
         return self._player_by_seat(self._seat_by_sid(sid))
@@ -500,13 +627,12 @@ class GameService:
 
     def get_or_create_room(self, room_id: str) -> GameRoom:
         if room_id not in self.rooms:
-            self.rooms[room_id] = GameRoom(room_id=room_id)
+            self.rooms[room_id] = GameRoom(room_id=room_id, auto_fill_bots=True)
         return self.rooms[room_id]
 
     def maybe_cleanup_room(self, room_id: str) -> None:
         room = self.rooms.get(room_id)
         if not room:
             return
-        if room._active_player_count() == 0:
+        if room.human_player_count() == 0:
             del self.rooms[room_id]
-

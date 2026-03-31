@@ -24,17 +24,26 @@ class ScoreCalculator:
         rob_kong: bool = False,
         kong_discard: bool = False,
     ) -> ScoreResult:
-        if len(hand_tiles) != 14 or not WinChecker.is_win(hand_tiles):
+        melds = melds or []
+        meld_count = len(melds)
+        expected_hand_len = 14 - 3 * meld_count
+        if expected_hand_len < 2:
+            return ScoreResult(fan=0, patterns=[])
+        if len(hand_tiles) != expected_hand_len or not WinChecker.is_win(hand_tiles):
             return ScoreResult(fan=0, patterns=[])
 
-        melds = melds or []
         patterns: list[str] = []
         fan = 0
 
         counts = Counter(tile.code for tile in hand_tiles)
-        is_qidui = WinChecker.is_seven_pairs(hand_tiles)
+        all_tiles_for_suit = hand_tiles.copy()
+        for meld in melds:
+            for code in meld.get("tiles", []):
+                all_tiles_for_suit.append(Tile.from_code(code))
+
+        is_qidui = meld_count == 0 and WinChecker.is_seven_pairs(hand_tiles)
         is_long_qidui = is_qidui and any(c == 4 for c in counts.values())
-        is_qingyise = len({tile.suit for tile in hand_tiles}) == 1
+        is_qingyise = len({tile.suit for tile in all_tiles_for_suit}) == 1
         is_duiduihu = (not is_qidui) and WinChecker.is_all_pungs(hand_tiles)
 
         if is_long_qidui:
@@ -75,4 +84,3 @@ class ScoreCalculator:
             patterns.append("gang_shang_pao")
 
         return ScoreResult(fan=fan, patterns=patterns)
-

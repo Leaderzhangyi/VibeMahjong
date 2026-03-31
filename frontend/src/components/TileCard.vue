@@ -1,13 +1,16 @@
 <script setup lang="ts">
+import { tileToLabel } from "../utils/tile";
+
 defineProps<{
   tile: string;
   clickable?: boolean;
+  enabled?: boolean;
 }>();
 </script>
 
 <template>
-  <button class="tile-card" :class="{ clickable }">
-    {{ tile }}
+  <button class="tile-card" :class="{ clickable, disabled: clickable && enabled === false }">
+    {{ tileToLabel(tile) }}
   </button>
 </template>
 
@@ -25,5 +28,9 @@ defineProps<{
 .tile-card.clickable {
   cursor: pointer;
 }
-</style>
 
+.tile-card.disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+</style>

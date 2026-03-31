@@ -4,6 +4,7 @@ import TileCard from "./TileCard.vue";
 const props = defineProps<{
   tiles: string[];
   clickable?: boolean;
+  allowedTiles?: string[];
 }>();
 
 const emit = defineEmits<{
@@ -12,6 +13,7 @@ const emit = defineEmits<{
 
 const onClick = (tile: string) => {
   if (!props.clickable) return;
+  if (props.allowedTiles && !props.allowedTiles.includes(tile)) return;
   emit("select", tile);
 };
 </script>
@@ -23,6 +25,7 @@ const onClick = (tile: string) => {
       :key="`${tile}-${idx}`"
       :tile="tile"
       :clickable="clickable"
+      :enabled="!allowedTiles || allowedTiles.includes(tile)"
       @click="onClick(tile)"
     />
   </div>
@@ -35,4 +38,3 @@ const onClick = (tile: string) => {
   gap: 6px;
 }
 </style>
-

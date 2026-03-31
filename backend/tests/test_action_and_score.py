@@ -41,3 +41,25 @@ def test_score_qing_yi_se_long_qi_dui_self_draw() -> None:
     assert "qi_dui" in result.patterns
     assert "zi_mo" in result.patterns
 
+
+def test_score_with_existing_melds_should_allow_non_14_hand_len() -> None:
+    # 1个明刻后，手牌应为11张，仍可胡牌。
+    hand_tiles = [
+        Tile.from_code(code)
+        for code in [
+            "1m",
+            "2m",
+            "3m",
+            "4m",
+            "5m",
+            "6m",
+            "7m",
+            "8m",
+            "9m",
+            "2b",
+            "2b",
+        ]
+    ]
+    melds = [{"type": "pong", "tiles": ["3b", "3b", "3b"], "from": 1}]
+    result = ScoreCalculator.calculate_fan(hand_tiles=hand_tiles, melds=melds, self_draw=True, menqing=False)
+    assert result.fan >= 1

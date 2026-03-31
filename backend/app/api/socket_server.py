@@ -46,6 +46,8 @@ async def rooms() -> dict:
 async def emit_room_snapshots(room_id: str) -> None:
     room = service.get_or_create_room(room_id)
     for sid in list(room.sid_to_seat.keys()):
+        if sid.startswith("bot:"):
+            continue
         try:
             snapshot = room.snapshot_for_sid(sid)
             await sio.emit("snapshot", snapshot, to=sid)
@@ -108,6 +110,7 @@ async def ready(sid: str, data: dict | None = None) -> None:
         room = service.get_or_create_room(room_id)
         try:
             room.set_ready(sid=sid, ready=ready_value)
+            room.auto_progress()
             await emit_room_snapshots(room_id)
         except Exception as exc:  # noqa: BLE001
             await sio.emit("error", {"message": str(exc)}, to=sid)
@@ -148,8 +151,8 @@ async def action(sid: str, data: dict) -> None:
             else:
                 raise ValueError("unknown action")
 
+            room.auto_progress()
             await sio.emit("event", data, room=room_id)
             await emit_room_snapshots(room_id)
         except Exception as exc:  # noqa: BLE001
             await sio.emit("error", {"message": str(exc)}, to=sid)
-
