@@ -1,16 +1,26 @@
 <script setup lang="ts">
-import { tileToLabel } from "../utils/tile";
+import { computed } from "vue";
+import { tileToImage, tileToLabel } from "../utils/tile";
 
-defineProps<{
+const props = defineProps<{
   tile: string;
   clickable?: boolean;
   enabled?: boolean;
 }>();
+
+const imageSrc = computed(() => tileToImage(props.tile));
 </script>
 
 <template>
   <button class="tile-card" :class="{ clickable, disabled: clickable && enabled === false }">
-    {{ tileToLabel(tile) }}
+    <img
+      v-if="imageSrc"
+      class="tile-image"
+      :src="imageSrc"
+      :alt="tileToLabel(tile)"
+      draggable="false"
+    />
+    <span v-else>{{ tileToLabel(tile) }}</span>
   </button>
 </template>
 
@@ -23,6 +33,15 @@ defineProps<{
   background: #fff8e6;
   color: #222;
   font-weight: 700;
+  padding: 0;
+  overflow: hidden;
+}
+
+.tile-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 
 .tile-card.clickable {

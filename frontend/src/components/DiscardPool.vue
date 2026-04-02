@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { tileToLabel } from "../utils/tile";
+import TileCard from "./TileCard.vue";
 
 defineProps<{
   discards: string[];
@@ -8,7 +8,7 @@ defineProps<{
 
 <template>
   <div class="pool">
-    <span v-for="(tile, idx) in discards" :key="`${tile}-${idx}`">{{ tileToLabel(tile) }}</span>
+    <TileCard v-for="(tile, idx) in discards" :key="`${tile}-${idx}`" :tile="tile" />
   </div>
 </template>
 

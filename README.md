@@ -74,3 +74,9 @@ docker compose up --build
 3. Redis 房间状态共享（多实例）
 4. AI 环境与 PPO 训练管线（`backend/ai`）
 
+
+## Latest Update (2026-04-02)
+
+- Frontend tile rendering now prefers image assets (`m/s/p*.gif`) with text fallback.
+- `DiscardPool` now reuses `TileCard` for visual consistency.
+- Added suit normalization (`b -> p`) in tile image mapping to match asset naming.
